@@ -15,6 +15,7 @@ struct Cli {
 enum Commands {
     Add { task_name: String },
     List { status: Option<TaskStatus> },
+    Mark { id: u64, status: TaskStatus },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -90,7 +91,15 @@ fn add_task(task_name: String) {
 
 fn list_task(status: Option<TaskStatus>) {
     let current_task_data = get_current_task_data();
-    let print_task = |t: &Task| println!("[{}] #{} {}", t.status, t.id, t.name);
+    let print_task = |t: &Task| {
+        let now = Utc::now();
+        let task_age = t.created_at - now;
+        let task_age_humanize = chrono_humanize::HumanTime::from(task_age);
+        println!(
+            "[{}] #{} {} ({})",
+            t.status, t.id, t.name, task_age_humanize
+        );
+    };
     let task_iter = current_task_data.tasks.iter();
     if let Some(status) = status {
         task_iter
@@ -101,11 +110,28 @@ fn list_task(status: Option<TaskStatus>) {
     };
 }
 
+fn mark_task(id: u64, status: TaskStatus) {
+    let mut current_task_data = get_current_task_data();
+    let task_to_update_index = current_task_data.tasks.iter().position(|t| t.id == id);
+    if let Some(task_to_update_index) = task_to_update_index {
+        let task_to_update = &mut current_task_data.tasks[task_to_update_index];
+        if task_to_update.status == status {
+            return;
+        }
+        task_to_update.status = status;
+        task_to_update.updated_at = Utc::now();
+    } else {
+        println!("No task with id {}", id)
+    }
+    save_task_data(current_task_data);
+}
+
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Add { task_name } => add_task(task_name),
         Commands::List { status } => list_task(status),
+        Commands::Mark { id, status } => mark_task(id, status),
     }
 }
