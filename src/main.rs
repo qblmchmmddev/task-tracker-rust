@@ -1,7 +1,7 @@
 use std::{fmt::Display, fs::File, io::Write};
 
 use chrono::{DateTime, Utc};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
@@ -14,7 +14,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Add { task_name: String },
-    List,
+    List { status: Option<TaskStatus> },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -32,7 +32,7 @@ struct Task {
     updated_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Clone, ValueEnum)]
 enum TaskStatus {
     Todo,
     InProgress,
@@ -88,12 +88,17 @@ fn add_task(task_name: String) {
     println!("Task added successfully (ID: {})", id)
 }
 
-fn list_task() {
+fn list_task(status: Option<TaskStatus>) {
     let current_task_data = get_current_task_data();
-    current_task_data
-        .tasks
-        .iter()
-        .for_each(|t| println!("[{}] #{} {}", t.status, t.id, t.name));
+    let print_task = |t: &Task| println!("[{}] #{} {}", t.status, t.id, t.name);
+    let task_iter = current_task_data.tasks.iter();
+    if let Some(status) = status {
+        task_iter
+            .filter(|t| t.status == status)
+            .for_each(print_task);
+    } else {
+        task_iter.for_each(print_task);
+    };
 }
 
 fn main() {
@@ -101,6 +106,6 @@ fn main() {
 
     match cli.command {
         Commands::Add { task_name } => add_task(task_name),
-        Commands::List => list_task(),
+        Commands::List { status } => list_task(status),
     }
 }
