@@ -1,5 +1,6 @@
-use std::{fs::File, io::Write};
+use std::{fmt::Display, fs::File, io::Write};
 
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
@@ -13,35 +14,86 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Add { task_name: String },
+    List,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct TaskData {
+    tasks: Vec<Task>,
+    id_counter: u64,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Task {
+    id: u64,
     name: String,
+    status: TaskStatus,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
-fn get_current_task() -> Vec<Task> {
-    let json_file = File::open("tasks.json");
-    if let Ok(json_file) = json_file {
-        let tasks = serde_json::from_reader::<_, Vec<Task>>(json_file);
-        tasks.unwrap_or(Vec::new())
-    } else {
-        Vec::new()
+#[derive(Serialize, Deserialize)]
+enum TaskStatus {
+    Todo,
+    InProgress,
+    Done,
+}
+
+impl Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Todo => "Todo",
+                Self::InProgress => "InProgress",
+                Self::Done => "Done",
+            }
+        )
     }
 }
 
-fn save_tasks(tasks: Vec<Task>) {
-    let tasks_json = serde_json::to_string_pretty(&tasks).expect("Serialize to json");
+fn get_current_task_data() -> TaskData {
+    let json_file = File::open("tasks.json");
+    if let Ok(json_file) = json_file {
+        let task_data = serde_json::from_reader::<_, TaskData>(json_file);
+        task_data.unwrap_or_default()
+    } else {
+        TaskData::default()
+    }
+}
+
+fn save_task_data(task_data: TaskData) {
+    let task_data_json = serde_json::to_string_pretty(&task_data).expect("Serialize to json");
     let mut file = File::create("tasks.json").expect("Tasks json file");
-    file.write_all(tasks_json.as_bytes())
+    file.write_all(task_data_json.as_bytes())
         .expect("Save tasks json");
 }
 
 fn add_task(task_name: String) {
-    let mut current_tasks = get_current_task();
-    let new_task = Task { name: task_name };
-    current_tasks.push(new_task);
-    save_tasks(current_tasks);
+    let mut task_data = get_current_task_data();
+    let id = task_data.id_counter;
+    let status = TaskStatus::Todo;
+    let now = Utc::now();
+    let new_task = Task {
+        id,
+        name: task_name,
+        status,
+        created_at: now,
+        updated_at: now,
+    };
+    task_data.tasks.push(new_task);
+    task_data.id_counter += 1;
+    save_task_data(task_data);
+    println!("Task added successfully (ID: {})", id)
+}
+
+fn list_task() {
+    let current_task_data = get_current_task_data();
+    current_task_data
+        .tasks
+        .iter()
+        .for_each(|t| println!("[{}] #{} {}", t.status, t.id, t.name));
 }
 
 fn main() {
@@ -49,5 +101,6 @@ fn main() {
 
     match cli.command {
         Commands::Add { task_name } => add_task(task_name),
+        Commands::List => list_task(),
     }
 }
