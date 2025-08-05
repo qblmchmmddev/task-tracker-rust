@@ -17,6 +17,7 @@ enum Commands {
     List { status: Option<TaskStatus> },
     Mark { id: u64, status: TaskStatus },
     Update { id: u64, name: String },
+    Delete { id: u64 },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -124,7 +125,20 @@ where
         if *task_to_update != original_task {
             task_to_update.updated_at = Utc::now();
             save_task_data(current_task_data);
+            println!("Task updated successfully (ID: {})", id)
         }
+    } else {
+        println!("No task with id {}", id)
+    }
+}
+
+fn delete_task(id: u64) {
+    let mut current_task_data = get_current_task_data();
+    let task_to_delete_index = current_task_data.tasks.iter().position(|t| t.id == id);
+    if let Some(task_to_delete_index) = task_to_delete_index {
+        current_task_data.tasks.remove(task_to_delete_index);
+        save_task_data(current_task_data);
+        println!("Task deleted successfully (ID: {})", id)
     } else {
         println!("No task with id {}", id)
     }
@@ -137,5 +151,6 @@ fn main() {
         Commands::List { status } => list_task(status),
         Commands::Mark { id, status } => update_task(id, |t| t.status = status),
         Commands::Update { id, name } => update_task(id, |t| t.name = name),
+        Commands::Delete { id } => delete_task(id),
     }
 }
